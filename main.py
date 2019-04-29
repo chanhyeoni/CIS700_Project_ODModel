@@ -1,38 +1,38 @@
-from __future__ import division
 #!/usr/bin/env python
-
-
-import numpy as np
-import pandas as pd
-from sklearn import neighbors
 
 import sys
 import os
 
 from helper.helper import *
+from models.instancebased import *
+from models.generative import *
+from models.discriminative import *
+
 
 
 if __name__=="__main__":
-	if len(sys.argv) < 4:
-		print 'Usage: %s <data_filename> <attack_scenario> <learning_type> <publish_rate>' % sys.argv[0]
+	if len(sys.argv) < 5:
+		print 'Usage: %s <data_filename> <attack_scenario> <modelname> <publish_rate> <params>' % sys.argv[0]
 		sys.exit(1)
 
 	# assign arguments to parameters
 	filename = sys.argv[1]
-	#filename = './data/gps_bag_1.csv'
+	#filename = 'gps_0.1_10.csv'
 	attack_scenario = sys.argv[2]
-	learning_type = sys.argv[3]
+	#attack_scenario = 'similar_values'
+	modelname = sys.argv[3]
 	publish_rate = sys.argv[4]
+	params = {}
 
 	# n_neighbors
-	n_neighbors = 
+
 
 	if attack_scenario not in attack_scenario_list:
 		print 'attack_scenario must be one of zero_lat_long, similar_values ...'
 		sys.exit(1)
 
-	if learning_type not in learning_type_list:
-		print 'learning_type must be discriminative, generative, or instance-based'
+	if modelname not in all_models_list:
+		print 'modelname must be one of the following: [' + printModelsInStr(all_models_list) + ']'
 		sys.exit(1)
 
 	# get the data
@@ -43,41 +43,58 @@ if __name__=="__main__":
 	arguments_for_graphs_json['filename'] = filename
 	arguments_for_graphs_json['attack_scenario'] = attack_scenario
 	arguments_for_graphs_json['publish_rate'] = publish_rate
+	arguments_for_graphs_json['model'] = modelname
 
+	# get instance type by looking at modelname
+	learning_type = getLearningType(modelname)
+
+	if learning_type == None or learning_type == "":
+		print 'learning_type must be one of the following: [' + learning_type.keys() + ']'
+		sys.exit(1)		
 
 	# train model
 	model = None
-	for modelname in models:
-		if (modelname == 'LOF'):
-			arguments_for_graphs_json['model'] = modelname
-			distance_metrics = ['cityblock', 'euclidean', 'l1', 'l2', 'manhattan']
-			arguments_for_graphs_json['distance_metric_list'] = distance_metrics
-			for distance_metric in distance_metrics:
-				dist_metrics_result_json = {}
-				model = neighbors.LocalOutlierFactor(n_neighbors=100, algorithm='auto', metric=distance_metric)
-				y_pred = model.fit_predict(data[['latitude', 'longitude']])
-				n_errors = (y_pred != data['label']).sum()
-				n_rights = (y_pred == data['label']).sum()
-				error = n_errors / data.shape[0]
-				accuracy = n_rights / data.shape[0]
-				X_scores = model.negative_outlier_factor_
-				#print_statement_1 = "N of Errors of of model " + modelname + " using argument " + distance_metric + ": " + str(n_errors)
-				#print_statement_2 = "Error of model " + modelname + " using argument " + distance_metric + ": " + str(error)
+	params = {}
 
-				dist_metrics_result_json = {
-					'X_scores'		:		X_scores.tolist(),
-					'n_errors'		:		n_errors,
-					'error' 		:		error,
-					'accuracy'		:		accuracy
-				}
+	if learning_type == 'instance-based':
 
-				arguments_for_graphs_json[distance_metric] = dist_metrics_result_json
+		if (modelname=='LOF'):
+			params = {"n_neighhbors": [100]}
 
-				# os.system(command)
+			learning_model = InstanceBased(modelname, params) # cross-validation
+			arguments_for_graphs_json['distance_metric_list'] = learning_model.getDistanceMetricsList()
+
+			dist_metrics_results_json = learning_model.analyze(data, ['latitude', 'longitude'], 'label')
+
+			for distance_metric in dist_metrics_results_json.keys():
+				arguments_for_graphs_json[distance_metric] = dist_metrics_results_json[distance_metric]
+
 			saveToJson(modelname,arguments_for_graphs_json)
 
-		elif (modelname == 'KNN'):
-			distance_metrics = ['cityblock', 'cosine', 'euclidean', 'l1', 'l2', 'manhattan']
+	elif learning_type == 'discriminative':
+		# TODO
+		if (modelname == 'svm'):
+			params = {'gamma': [0.1]}
+
+			learning_model = Discriminative(modelname, params)
+			arguments_for_graphs_json['kernel_metric_list'] = learning_model.getKernelMetricsList()
+
+			kernel_metrics_results_json = learning_model.analyze(data, ['latitude', 'longitude'], 'label')
+
+			for kernel_metric in kernel_metrics_results_json.keys():
+				arguments_for_graphs_json[kernel_metric] = kernel_metrics_results_json[kernel_metric]
+
+			saveToJson(modelname,arguments_for_graphs_json)	
+
+		elif (modelname == 'lstm'):
+			params = {}
+
+			pass
+
+
+	elif learning_type == 'generative':
+		# TODO
+		pass
 
 
 

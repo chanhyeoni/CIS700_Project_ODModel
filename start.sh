@@ -1,7 +1,11 @@
-# test instance-based method
-python main.py gps_0.1_10.csv similar_values instance-based 0.1
-# show LOF graphs
-python LOF_graph.py ./results/LOF.txt 34 56 -69 -91
+# # test instance-based method
+# python main.py gps_0.1_10.csv similar_values LOF 0.1 
+# # show LOF graphs
+# python LOF_graph.py ./results/LOF.txt 34 56 -69 -91
+
+python main.py gps_0.1_10.csv similar_values svm 0.1
+
+python svm_graph.py ./results/svm.txt 34 56 -69 -91
 
 # # test instance-based method
 # python main.py gps_0.1.csv similar_values instance-based 0.1
