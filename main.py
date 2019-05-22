@@ -2,99 +2,134 @@
 
 import sys
 import os
+import json
 
 from helper.helper import *
-from models.instancebased import *
-from models.generative import *
-from models.discriminative import *
+from models.InstanceBased import *
+from models.Generative import *
+from models.Discriminative import *
+
+# create json data structures for results
+arguments_for_graphs_json = {}
+
+
+def loadData(data_dic):
+	###### check data part of configuration file ######
+
+	# assign arguments to parameters
+	filename = data_dic['filename']
+	#filename = 'gps_0.1_10.csv'
+	attack_scenario = data_dic['attack_scenario']
+	#attack_scenario = 'similar_values'
+	publish_rate = data_dic['publish_rate']
+
+	if attack_scenario.lower() not in attack_scenario_list:
+		print 'attack_scenario must be one of zero_lat_long, similar_values, infinity ...'
+		sys.exit(1)
+
+	# get the data
+	label = data_dic['labelname']
+	data, columns = toPandasData(attack_scenario,filename)
+	try:
+		columns.remove(label)
+	except ValueError:
+		print 'the label' + label + ' does not exist in the dataset loaded'
+		sys.exit(1)
+
+	return data, label, columns, data_dic['k-fold']
+
+# def splitData(split_method_dic, data):
+# 	# split the data based on the method specified by config file
+# 	dataset = {}
+# 	method_name = ''
+# 	data_json = None
+# 	if (split_method_dic != None or split_method_dic != {}):
+# 		method_name = split_method_dic['name']
+# 		if (method_name == 'train_test_split'):
+# 			data_json = split_data(data)
+# 		else (method_name == 'k_fold'):
+# 			data_json = conductKFoldCV(data)
+# 			pass
+
+# 	return data_json
+
+
+def train(model_config, dataset, columns, label, fold_val):
+
+	# parse dataset
+
+	for model_info in model_config:
+		modelname = model_info['modelname']
+		params = model_info["params"]
+		learning_model = None
+		if (modelname.upper()=='LOF'):
+			
+			learning_model = LoF(params, fold_val) # cross-validation
+			# for distance_metric in dist_metrics_results_json.keys():
+			# 	arguments_for_graphs_json[distance_metric] = dist_metrics_results_json[distance_metric]
+
+		elif (modelname.upper() == 'SVM'):
+			
+			learning_model = OneClassSVM(params, fold_val)
+
+			# for kernel_metric in kernel_metrics_results_json.keys():
+			# 	arguments_for_graphs_json[kernel_metric] = kernel_metrics_results_json[kernel_metric]
+
+		elif (modelname.upper() == 'LSTM'):
+		 	pass
+		elif (modelname.upper() == 'HMM'):
+		 	pass
+		elif (modelname.upper() == ''):
+		 	pass	
+
+		 # cross-validation
+		arguments_for_graphs_json[modelname] = learning_model.analyze(dataset, columns, label)
 
 
 
 if __name__=="__main__":
-	if len(sys.argv) < 5:
-		print 'Usage: %s <data_filename> <attack_scenario> <modelname> <publish_rate> <params>' % sys.argv[0]
+
+	###### load configuration file ######
+	if len(sys.argv) < 2:
+		print 'Usage: %s </path/to/config_file>' % sys.argv[0]
 		sys.exit(1)
 
-	# assign arguments to parameters
 	filename = sys.argv[1]
-	#filename = 'gps_0.1_10.csv'
-	attack_scenario = sys.argv[2]
-	#attack_scenario = 'similar_values'
-	modelname = sys.argv[3]
-	publish_rate = sys.argv[4]
-	params = {}
-
-	# n_neighbors
+	with open(filename, 'r') as json_file:
+		print filename
+		config_data = json.load(json_file)
+		###### load configuration file ######
 
 
-	if attack_scenario not in attack_scenario_list:
-		print 'attack_scenario must be one of zero_lat_long, similar_values ...'
-		sys.exit(1)
-
-	if modelname not in all_models_list:
-		print 'modelname must be one of the following: [' + printModelsInStr(all_models_list) + ']'
-		sys.exit(1)
-
-	# get the data
-	data = formatData(filename, attack_scenario)
-
-	# create json data structures for results
-	arguments_for_graphs_json = {}
-	arguments_for_graphs_json['filename'] = filename
-	arguments_for_graphs_json['attack_scenario'] = attack_scenario
-	arguments_for_graphs_json['publish_rate'] = publish_rate
-	arguments_for_graphs_json['model'] = modelname
-
-	# get instance type by looking at modelname
-	learning_type = getLearningType(modelname)
-
-	if learning_type == None or learning_type == "":
-		print 'learning_type must be one of the following: [' + learning_type.keys() + ']'
-		sys.exit(1)		
-
-	# train model
-	model = None
-	params = {}
-
-	if learning_type == 'instance-based':
-
-		if (modelname=='LOF'):
-			params = {"n_neighhbors": [100]}
-
-			learning_model = InstanceBased(modelname, params) # cross-validation
-			arguments_for_graphs_json['distance_metric_list'] = learning_model.getDistanceMetricsList()
-
-			dist_metrics_results_json = learning_model.analyze(data, ['latitude', 'longitude'], 'label')
-
-			for distance_metric in dist_metrics_results_json.keys():
-				arguments_for_graphs_json[distance_metric] = dist_metrics_results_json[distance_metric]
-
-			saveToJson(modelname,arguments_for_graphs_json)
-
-	elif learning_type == 'discriminative':
-		# TODO
-		if (modelname == 'svm'):
-			params = {'gamma': [0.1]}
-
-			learning_model = Discriminative(modelname, params)
-			arguments_for_graphs_json['kernel_metric_list'] = learning_model.getKernelMetricsList()
-
-			kernel_metrics_results_json = learning_model.analyze(data, ['latitude', 'longitude'], 'label')
-
-			for kernel_metric in kernel_metrics_results_json.keys():
-				arguments_for_graphs_json[kernel_metric] = kernel_metrics_results_json[kernel_metric]
-
-			saveToJson(modelname,arguments_for_graphs_json)	
-
-		elif (modelname == 'lstm'):
-			params = {}
-
-			pass
+		###### data part ######
+		data_dic = config_data['data']
+		if (data_dic == None or data_dic == '' or data_dic == {}):
+			print "No information about data exists in config file."
+			sys.exit(1)
+		data_pd, data_pd_label, data_pd_columns, fold_val = loadData(data_dic)
 
 
-	elif learning_type == 'generative':
-		# TODO
-		pass
+
+
+		###### model part ######
+		models_dic = config_data['models']
+		if (models_dic == None or models_dic == '' or models_dic == {}):
+			print "no information about model exists in config file. "
+			sys.exit(1)
+
+		###### model part ######
+		train(models_dic, data_pd, data_pd_columns, data_pd_label, fold_val)
+		###### model part ######
+
+
+		arguments_for_graphs_json['filename'] = config_data['data']['filename']
+		arguments_for_graphs_json['attack_scenario'] = config_data['data']['attack_scenario']
+		arguments_for_graphs_json['publish_rate'] = config_data['data']['publish_rate']
+		# arguments_for_graphs_json['model'] = modelname
+
+		filename = "result_" + arguments_for_graphs_json['filename'] + "_" + arguments_for_graphs_json['attack_scenario'] 
+		saveToJson(filename,arguments_for_graphs_json)
+
 
 
 

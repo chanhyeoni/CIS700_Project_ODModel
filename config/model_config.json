@@ -1,0 +1,27 @@
+{
+	"data": {
+		"filename": "data.csv",
+		"attack_scenario": "similar_values",
+		"publish_rate": 0.1,
+		"labelname" : "label",
+		"k-fold" : 5
+	},
+	"models":[
+		{
+			"modelname" : "lof",
+			"params" : {
+				"n_neighbors": [50, 100, 150, 200],
+				"distance_metrics" :  ["cityblock", "euclidean", "l1", "l2", "manhattan"]
+			}
+		},
+		{
+			"modelname" : "svm",
+			"params" : {
+				"gamma": [0.1],
+				"kernel_metrics" :  ["rbf", "linear"]
+			}
+		}
+	]
+}
+
+
